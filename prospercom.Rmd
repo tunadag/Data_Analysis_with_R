@@ -1,0 +1,296 @@
+---
+title: 'R programlama diliyle veri seti incelemesi: Prosper.com kredi verileri'
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document: default
+  word_document: default
+---
+Bu çalýþmam, R programlama diliyle veri seti analizine örnek bir uygulamadýr, ayný zamanda Udacity - "Data Analysis with R" dersi için de yaptýðým final projesidir. Veri seti csv formatýnda olup 82 deðiþken ve 113937 gözlemden oluþmaktadýr. "**ProsperLoanData**" adýndaki bu veri setine ilk göz atýþým sonrasý deðiþkenlerin neyi ifade ettiðine dair ön bir araþtýrma yaptým, öyle ki veriler Türkiye'de benzeri olmayan bir iþ modeline ait. *Prosper.com* adýyla ABD'de faaliyet gösteren bu internet sitesi, basit bir tanýmla kredi ihtiyacý olanlarýn ve kredi veren bireysel yatýrýmcýlarýn buluþtuðu bir platform. Veri setindeki her bir gözlem de, gerçekleþen kredi iþlemine dair bilgileri barýndýrmaktadýr. Bu paylaþým, R Studio platformunda bir veri setinin analiz sürecinde *ggplot2*, *dplyr*, *tidyr* baþta olmak üzere  kullanýlan kütüphane ve kodlarý içermektedir. Bu paylaþýmdaki amacým, R diline ilgi duyanlar veya öðrenmeye yeni baþlayanlar için merak ve kimi sorularýný giderebilecekleri bir alýþtýrma örneði sunmaktýr. Bir alýþtýrma uygulamasý olmasý nedeniyle herhangi bir sorunun çözümüne yanýt aramaktan ziyade, bu çalýþmada R dilinde öðrenilenlerin pratikte uygulanmasý amacý güdüldüðünden çözümlemeler serbest bir yaklaþýmla yapýlmýþtýr.
+```{r  "setup", include=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "C:/Users/User/Downloads/")
+```
+
+```{r, message=FALSE, warning=FALSE}
+#Verinin yüklenmesi ve
+#ilgili kütüphanelerin yüklenmesi
+setwd("C:/Users/User/Downloads/")
+ld <- read.csv("prosperLoanData.csv")
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+Ýlk olarak deðiþkenler içinde analiz için gereksiz görülenler tespit edilerek veri setinden çýkarýlmýþtýr.    
+
+```{r,message=FALSE, warning=FALSE}
+#Gereksiz görülen/istenmeyen deðiþkenlerin veri setinden çýkarýlmasý
+ld$ListingKey <- NULL
+ld$ListingNumber <- NULL
+ld$LoanKey <- NULL
+```
+
+Harf ile ifade edilen kredi notlarý( *"CreditGrade"* ) ve Prosper derecelendirme ( *"ProsperRating..Alpha."* ) deðiþkenlerinin grafiklerde rahatlýkla anlaþýlmasý için harfler en yüksekten en düþük deðeri temsile göre sýralanmýþtýr. Ayný amaçla gelir grubu ( *"IncomeRange"* ) deðiþkeni de düzenlenmiþtir.
+```{r, message=FALSE, warning=FALSE}
+#Deðiþken deðerlerinin belirtilen bir sýraya göre dizilmesi
+ld$CreditGrade <- ordered(ld$CreditGrade, levels = c("AA", "A", "B", "C", "D", "E", "HR", "Nc", "NA"))
+ld$ProsperRating..Alpha. <- ordered(ld$ProsperRating..Alpha., levels = 
+                                      c("AA", "A", "B", "C", "D", "E", "HR", ""))
+ld$IncomeRange <- ordered(ld$IncomeRange, levels = c("Not displayed", "Not employed", "$0", "$1-24,999", "$25,000-49,999", "$50,000-74,999", "$75,000-99,999", "$100,000+"))
+```
+
+*separate()* fonksiyonu kullanýlarak *"LoanOriginateDate"* deðiþkeni içinde yer alan deðerler yýl( *"L.O.Year"* ), ay( *"L.O.Month"* ) ve gün( *"L.O.Day"* ) olarak ayrýlarak yeni deðiþkenler oluþturulmuþtur.(Saat, dakika ve saniye kýsýmlarý tamamen çýkarýlmýþtýr.)
+```{r, message=FALSE, warning=FALSE}
+#Deðiþken deðerleri karakterlerine göre ayrýlarak yeni deðiþkenler oluþturulmasý
+ld <- separate(ld, LoanOriginationDate, c("L.O.Year", "L.O.Month", "L.O.Day" ), sep = "-")
+#"L.O.Day" deðiþkeni içinde yer alan 'gün, saat, dakika, saniye' deðerleri içinde sadece gün deðerinin seçilmesi 
+ld$L.O.Day = unlist(strsplit(ld$L.O.Day, split=" ", fixed=TRUE))[1]
+```
+
+##Tek deðiþkenli görseller
+
+Merak ettiðim ilk husus bankalara göre daha avantajlý faiz oraný sunma iddiasýndaki Prosper'ýn faiz oranlarýný görselleþtirmek oldu. Öncelikle *summary()* fonksiyonu ile edindiðim özet bilgiye göre veri setinde yer alan kredi faiz oranlarýnýn en düþüðü 0.00653 iken en yüksek 0.51229 oraný olduðu görülmüþtür. Medyan fazi oraný deðeri 0.20976, ortalama faiz oraný ise 0.21883'dür. Histogram grafik ile görselleþtirildiðinde daðýlým 0.40 oranýndan sonra çok düþük olduðu için ggplot kodlarýndan gözlemleneceði üzere 0.05-0.42 deðerleri aralýðýnda sýnýrlandýrýlmýþtýr. 
+```{r, message=FALSE, warning=FALSE}
+#Kredi faiz oranlarýnýn daðýlýmý
+summary(ld$BorrowerAPR)
+ggplot(data = ld, aes(x = BorrowerAPR)) + 
+  geom_histogram(binwidth = 0.005) + 
+  scale_x_continuous(limits = c(0.05, 0.42), breaks = seq(0.05, 0.42, 0.02))
+```
+
+Tahmin etmek zor olmasa da görselden görüldüðü üzere; Prosper'da kredi alanlar içinde iþ durumlarýna( *"Employment Status"* ) göre çalýþanlar ("Employed" ve "Full-time") aðýrlýklýdýr. Çalýþmayanlar("Not employed"), serbest çalýþanlar("Self-employed"), kýsmi zamanlý çalýþanlar("Part-time"), emekliler("Retired") ve çalýþma durumu hakkýnda bilgisi bulunmayan kredi borçlularý ("Not available", "Other" ve boþ) görece azýnlýktadýr.
+```{r, message=FALSE, warning=FALSE}
+#Kredi borçlularýnýn iþ durumlarý
+summary(ld$EmploymentStatus)
+ggplot(ld, aes(EmploymentStatus)) + geom_bar()
+```
+
+Kredi notlarýna göre borçlularýn daðýlýmý incelendiðinde herhangi bir nota sahip olmayan borçlularýn çok daha fazla olduðu görülmüþtür. Çoðunluðu oluþturan bu grup çýkarýldýðýnda kredi notlarýna göre borçlular normal daðýlým göstermektedir.
+```{r, message=FALSE, warning=FALSE}
+#Kredi notlarýna göre borçlularýn daðýlýmý
+summary(ld$CreditGrade)
+ggplot(data = ld, aes(CreditGrade)) + geom_bar()
+#Görselden kredi notuna sahip olmayan gözlemlerin çýkarýlmasý
+ggplot(data = subset(ld, ld$CreditGrade != ""), aes(CreditGrade)) + geom_bar()
+```
+
+Veri setinde yer alan, gelir gruplarýna göre Prosper üzerinden kredi alanlarýn yarýsýný 25-50 bin ile 50-75 bin dolar yýllýk gelire sahip borçlular oluþturmaktadýr. Bu iki gruptaki borçlularýn sayýsý, 75-100 bin ile 100 bin üzeri gelir grubuna dahil borçlularýn sayýsýnýn yaklaþýk ikiþer katýdýr.Herhangi bir gelir grubuna dahil görünmeyen/gelir  beyan etmeyen ("Not Displayed", "Not employed" ve "$0") ve yýllýk gelirleri 1-25 bin dolar aralýðýnda olan borçlularýn sayýsý toplamý da üst gelir grubuna (75-100 ve 100+) dahil borçlu sayýsýnýn yarýsý civarýndadýr.
+```{r, message=FALSE, warning=FALSE}
+#Kredi borçlularýnýn gelir gruplarýna göre daðýlýmlarý
+summary(ld$IncomeRange)
+ggplot(data = ld, aes(IncomeRange)) + geom_bar()
+```
+
+Prosper.com üzerinden kredi kullananlarýn, kredi çekme nedenleri de merak ettiðim bir diðer konuydu. Çubuk grafik üzerinde beyan edilen nedenlerin daðýlýmýný göstermeden önce veri setinde sayýsal olarak yer alan deðerleri grafikte metin biçiminde göstermek için 1-20 aralýðýnda deðiþen her biri ayrý nedeni temsil eden sayýsal deðerler deðiþken tanýmlamalarýnýn yer aldýðý bilgilendirme notuna göre metin biçiminde düzenlenmiþtir. Görselden anlaþýlacaðý üzere 133937 kredi borçlusuna ait verilerin yarýsýndan fazlasý için kredi çekme nedeni beyanýnda bulunulmamýþtýr ( *"Not Available"* + *NA* ). Mevcut beyanlara göre, otomobil("Auto"), borç transferi("Debt Consolidation") ve ev harcamalarý("Home Improvement") amacýyla çekilen kredilerin sayýsý öne çýkmaktadýr. Grafikte "Wedding Loans" deðerine ait bir çubuk görmeyince *table()* fonksiyonunu kullanarak bu deðere ait bir veri olmadýðýný gördüm.
+```{r, message=FALSE, warning=FALSE}
+#Kredi çekme nedenlerinin sayýsal daðýlýmý
+count(ld, ListingCategory..numeric.)
+#Kredi çekme nedenlerini temsil eden sayýsal deðerlerin metine dönüþümü
+x <- c("Not Available", "Debt Consolidation", "Home Improvement",
+           "Business", "Personal Loan", "Student Use", "Auto", "Other",
+           "Baby&Adoption", "Boat", "Cosmetic Procedure", "Engagement Ring", 
+           "Green Loans", "Household Expenses", "Large Purchases",
+           "Medical/Dental", "Motorcycle", "RV", "Taxes", "Vacation", 
+           "Wedding Loans")
+ld$ListingCategory <- factor(ld$ListingCategory..numeric., 
+                                     levels = seq(0:20), labels = x)
+#Kredi çekme nedenlerinin daðýlýmý
+ggplot(data=ld, aes(x=ListingCategory)) + 
+  geom_bar() + 
+  theme(axis.text.x = element_text(angle = -90))
+
+table(ld$ListingCategory)
+```
+
+Prosper'a yatýrým yapacak bir yatýrýmcýnýn belki de ilk merak edeceði sorunun yanýtýný aradým; "Bugüne dek gerçekleþmiþ kredi iþlemlerinde hesap durumlarýnýn daðýlýmý nedir?". Bunun için, akýbetinin ne olacaðý bilinmediði için  verisetinde ödemesi halihazýrda devam eden -*"Current"* durumundaki- hesaplar çýkarýlarak sonuçlar çubuk grafik üzerinde gösterilmiþtir. Elde edilen çýktýya göre ödemesi tamamlanan hesaplarýn oraný 2/3 oranýndadýr. Diðer bir deyiþle gecikmiþ ödeme veya ödenmeyen borçlardan ötürü yatýrýmcýlarýn içte bir ihtimalle baþ aðrýsý çekme olasýlýðý vardýr.  
+```{r, message=FALSE, warning=FALSE}
+library(scales)
+
+ggplot(data = subset(ld, LoanStatus!= 'Current'), aes(x = LoanStatus)) + 
+  geom_bar(aes(y = (..count..))) + 
+             geom_text(aes(y = (..count..), vjust = -0.5, label =   ifelse((..count..)==0,"", scales::percent((..count..)/sum(..count..)))), stat= "count")
+```
+
+
+## Ýki deðiþkenli görseller 
+
+Borç/gelir oranýnýn aylýk gelire göre daðýlýmý aþaðýda gösterilmiþtir. Yoðunluk aylýk 0-10 bin dolar gelir aralýðýyla 0.5 borç/gelir oraný arasýndayken, yüksek borç/gelir oranýna sahip borçlularýn düþük aylýk gelire sahip olduklarý görülmektedir. 
+```{r, message=FALSE, warning=FALSE}
+#Borç/gelir oranýnýn aylýk gelir ile karþýlaþtýrýlmasý
+ggplot(data = ld, aes(x=DebtToIncomeRatio, y=StatedMonthlyIncome)) + 
+  geom_jitter(alpha = 1/10, position = position_jitter(h = 0)) + xlim(0, 2.5) + ylim(0, 40000) 
+```
+
+Prosper.com verilerine göre mesleklere göre aylýk ortalama gelirleri karþýlaþtýrmak için bu iki deðiþkeni görselleþtirdiðimde veri setindeki meslek çeþitliliðinin fazla olmasý nedeniyle x ekseninde tüm meslek adlarýnýn birbirine girerek okunmasý mümkün olmayan bir grafik ortaya çýktý. Meslekleri incelediðimde bazý mesleklerin birleþtirilerek tek bir deðiþken olarak ifade edilebileceðini fark ettim. Uygulamada sadece öðrenci gruplarý birleþtirilerek *"Student"* adlý yeni bir deðiþken yaratýlmýþtýr.   
+```{r, message=FALSE, warning=FALSE}
+#Meslek ('Occupation') deðiþkeni deðerlerinden farklý gruplardan öðrencilerin
+# "Student" adlý tek bir deðere eþitlenmesi
+job_groups <- group_by(ld, Occupation)
+ld.by_jobs <- summarise(job_groups,
+                        monthly_income_mean = mean(StatedMonthlyIncome), monthly_income_median = median(StatedMonthlyIncome), n = n())
+ld.by_jobs <- t(ld.by_jobs)
+colnames(ld.by_jobs) <- ld.by_jobs[1, ]
+ld.by_jobs <- ld.by_jobs[-1, ]
+colnames(ld.by_jobs)[1] <- " "
+ld.by_jobs = as.data.frame(ld.by_jobs)
+ld.by_jobs[,1:68] <- lapply(ld.by_jobs[,1:68], function(x) as.numeric(as.character(x)))
+ld.by_jobs$Student <- rowMeans(ld.by_jobs[,54:60], na.rm = TRUE)
+ld.by_jobs <- ld.by_jobs[,c(1:53, 61:69)]
+ld.by_jobs <- ld.by_jobs[,c(1:53,62,54:61)]
+ld.by_jobs <- t(ld.by_jobs)
+ld.by_jobs = as.data.frame(ld.by_jobs)
+library(data.table)
+ld.by_jobs <- setDT(ld.by_jobs, keep.rownames = TRUE)[]
+colnames(ld.by_jobs)[1] <- "Occupation"
+```
+
+Bu iþlem ile mesleklerin aylýk gelir ortalamasý ve aylýk gelir medyan deðerleri ve frekanslarýný barýndýran *"ld.by_jobs"* adlý data.frame içeriðinde *"Occupation"* deðiþkeni deðerlerinden *"Student-College Freshman"*, *"Student-College Graduate Student"*, *"Student-College Junior"*, *"Student-College Senior"*, *"Student-College Sophomore"*, *"Student-Community College"* ve *"Student - Technical School"* deðerleri oluþturulan "Student" deðeri altýnda toplanmýþtýr. Mevcut 62 meslek içinde aylýk ortalama geliri 7500 dolar üzerinde olan meslekleri görselleþtirmeyi tercih ettim. Buna göre bu sýnýrý geçen 12 meslek grubu görülmektedir. 
+```{r, message=FALSE, warning=FALSE}
+#Aylik ortalama geliri 7500 uzerinde olan meslekler
+ggplot(data = subset(ld.by_jobs, ld.by_jobs$monthly_income_mean>7500), aes(x = Occupation, y = monthly_income_mean)) + 
+  geom_bar(stat = "identity", fill="slateblue") + coord_cartesian(ylim=c(7500,15000))
+```
+
+En iyi kredi notuna sahip mesleklerin daðýlýmýnda en az 100 "AA" notuna sahip meslekler, *%>%* operatörüyle *select()*, *filter()*, *group_by()*, *arrange()* ve *summarise()* fonksiyonlarý birlikte kullanýlarak gösterilmiþtir. 
+```{r, message=FALSE, warning=FALSE}
+#Sayýsý en az 100 olan, "AA" kredi derecesine sahip borçlularýn meslekleri 
+Jobs_w_AA_Grade <- ld %>% 
+  select(Job = Occupation, Grade = CreditGrade) %>%
+  filter(Grade == "AA") %>%
+  group_by(Job) %>%
+  arrange(Job) %>%
+  summarise(count = n()) %>%
+  filter(count >= 100)
+
+#'Matrix' formatýn 'data.frame'e dönüþtürülmesi
+Jobs_w_AA_Grade <- as.data.frame(Jobs_w_AA_Grade)
+
+ggplot(data = Jobs_w_AA_Grade, aes(x = Job, y = count)) +
+  geom_bar(stat = 'identity')
+```
+
+Aþaðýdaki grafik tek deðiþkene ait bir görsel olsa da, yine "AA" kredi notuna sahip borçlulara ait bir veri ve *subset()* fonksiyonunun kullanýmýndan ötürü bu bölümde yer almýþtýr. Grafikte "AA" Prosper derecelendirme notuna sahip borçlularýn eyaletlere göre daðýlýmlarý görülmektedir. Borçlular arasýnda AA notuna sahip olanlarýn bulunduðu eyaletler içinde Prosper.com'un adresi olan Kaliforniya(CA) eyaleti açýk ara öndedir.
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = subset(ld, ProsperRating..Alpha.=="AA"), aes(x = BorrowerState)) + geom_bar(stat = "count", fill = 'chocolate3') + 
+geom_text(stat = "count",aes(label=..count..), vjust = -0.5, size = 3)
+```
+
+Verilen kredi tutarýna göre yatýrýmcýlarýn kar ettikleri tutarlarýn karþýlaþtýrýlmasý aþaðýda gösterilmiþtir. Bu grafiðinde gösteriminde de ödemesi devam eden *"Current"* durumundaki hesaplar veri setinden çýkarýlmýþtýr. 
+```{r, message=FALSE, warning=FALSE}
+ld$InvestorProfit = ld$LP_CustomerPayments - ld$LoanOriginalAmount +
+                                 ld$LP_ServiceFees + ld$LP_CollectionFees + 
+                                 ld$LP_NonPrincipalRecoverypayments
+
+ggplot(data = subset(ld, LoanStatus != 'Current'), aes(x = LoanOriginalAmount, y = InvestorProfit)) + geom_point(alpha=1/10)
+```
+
+Borcunu ödemeyerek yatýrýmcýlarý zarara uðratan (*LP_GrossPrincipalLoss* deðiþkeni sýfýrdan büyük bir deðere sahip) hesaplarda, uðratýlan zararýn çekilen kredi tutarýna oranýnda Prosper derecelendirmesine göre bir farklýlýk olup olmadýðý yanýt aradýðým bir diðer soru oldu. Aþaðýdaki grafikte bu tür hesaplara ait brüt zarar tutarýnýn ( *"LP_GrossPrincipalLoss"* ) çekilen kredi tutarýna ( *"LoanOriginalAmount"* ) oraný y ekseninde gözlemlenirken, Prosper derecelendirmeleri x ekseninde temsil edilmektedir. Elde edilen grafiðe göre þu yorumu yapabiliriz; eðer çekilen kredi tutarýnýn geri ödemesi yapýlmýyorsa meydana gelen zarar tutarýnýn çekilen kredi tutarýna oraný tüm Prosper derecelendirmeleri için %70-%80 aralýðýndadýr. Daha basit tabirle, eðer kiþi borcunu ödememiþse en iyi Prosper derecelendirmesine de sahip olsa borcunun ortalama yüzde yetmiþini ödememiþtir.  
+```{r, message=FALSE, warning=FALSE}
+#Ödemesi yapýlmayan hesaplarda Prosper derecelendirmesine göre; ödenmeyen tutarýn, çekilen kredi tutarýna oraný
+ggplot(data = subset(ld, LP_GrossPrincipalLoss > 0), aes(x = ProsperRating..Alpha., y = LP_GrossPrincipalLoss/LoanOriginalAmount)) + geom_bar(stat = "summary", fun.y = mean)
+```
+
+## Çok deðiþkenli görseller
+
+Gelir gruplarý farklý renklerle temsil edilmek üzere aylýk gelirlerine(*"StatedMonthlyIncome"*) göre borçlularýn mevcut hesap ödenmemiþ tutarlarý (*"AmountDelinquent"*) gösterilmiþtir. Gelir gruplarýnýn veri setindeki frekans daðýlýmlarýna göre ödenmemiþ tutarlar yoðunluk göstermektedir. 
+```{r, message=FALSE, warning=FALSE}
+library(RColorBrewer)
+
+ggplot(data = subset(ld, !is.na(IncomeRange)), aes(x = StatedMonthlyIncome, y = AmountDelinquent, color = IncomeRange)) + 
+  geom_point() + xlim(0,15000) + ylim(0,30000) +
+  scale_color_brewer(palette="Set2")
+```
+
+Veri setinde her gözleme ait alt ve üst deðerler olmak üzere iki kredi skoru bulunmaktadýr, buna göre gelir gruplarýnýn kredi skorlarýna göre daðýlýmý gösterilmiþtir. Grafikten görüldüðü üzere dahil olunan gelir grubunun kredi skoruyla bir iliþkisi bulunmamaktadýr. Örneðin, senelik yüz bin dolar üzeri kazanan bir borçlunun 50-75 bin aralýðýna dahil bir borçludan kredi skoru düþük olabilmektedir. Sonraki adýmda, "CreditScoreAverage" adlý deðiþken oluþturularak alt ve üst kredi skor deðerlerinin ortalamasýnýn alýnmasýyla kredi skoru tek deðere indirgemiþtir. *"CreditScoreAverage"*a göre borçlularýn normal daðýlým yatýðý, kredi skorlarýnýn çoðunluðunun 650-750 aralýðýnda toplandýðý gözlemlenmektedir. 
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = ld, aes(x = CreditScoreRangeLower, y = CreditScoreRangeUpper, colour = IncomeRange)) + 
+  geom_point(size=4) + xlim(300,900) + ylim(300,900) +
+  scale_color_brewer(palette="Set1")
+ld$CreditScoreAverage <- (ld$CreditScoreRangeLower + ld$CreditScoreRangeUpper)/2
+ggplot(data = subset(ld, !is.na(CreditScoreAverage)), aes(x = CreditScoreAverage)) + geom_bar() + xlim(400,900)
+```
+
+Her bir Prosper derecelendirmesi için "chargedoff", ödemesi yapýlmamýþ(*"Defaulted"*) ve ödemesi tamamlanmýþ (*"Completed"*) hesap durumlarýnýn daðýlýmý gösterilmiþtir. Elde edilen sonuca göre Proseper derecesi arttýkça her bir derecelendirme deðeri içinde ödemesi tamamlanmýþ (*"Completed"*) hesaplarýn sayýsý artmaktadýr. 
+```{r, message=FALSE, warning=FALSE}
+ggplot(data = subset(ld, LoanStatus == 'Completed' | LoanStatus == 'Defaulted' | LoanStatus == 'Chargedoff'), aes(x = ProsperScore, fill = LoanStatus)) + 
+  geom_bar(aes(y = (..count..))) + 
+  facet_wrap(~ProsperScore, scales = "free_y") 
+```
+
+Prosper.com'un faaliyete geçtiðinden bu yana oluþturulan kredi tutarlarý ve açýlan hesap sayýsýnýn zamana göre deðiþimi platformun baþarýmýný izleme açýsýndan önemli veriler olarak incelenmiþtir. Çýktýlar, çeyrek-yýllara göre zaman serisi grafiði üzerrinde gösterilmiþtir. Bu noktada, karþýlaþtýðým engelden dolayý küçük bir düzenleme yaptým. Veri setinde kredi hesabý oluþturma tarihine göre yýl ve çeyrek sayýsýný gösteren "LoanOriginationQuarter" deðiþkeninde format yýl-çeyrek-saat-dakika-saniye þeklinde olduðundan dolayý grafik üzerinde zaman serisinin gösterildiði x ekseninde sýralama önce birinci çeyrek için yýllar ardýþýk olarak sýralanýyor, sonra ikinci çeyrek için tekrar yýllar baþlangýç yýlýndan itibaren ardýþýk olarak sýralanýyor ve dördünce çeyreðe kadar olan bu sýralama okuyucu için istenen grafiði vermeyen bir formattaydý. Bunun için *separate()* ve *unite()* fonksiyonlarý kullanýlarak *"LoanOriginationQuarter"* deðiþkeninde önce çeyrek sonra yýl ifadesinin yazýlmasý saðlanmýþ, tamamý 00:00:00 þeklinde olmasýndan ötürü gereksiz olan saat, dakika, saniye belirten kýsým atýlmýþtýr. 
+```{r, message=FALSE, warning=FALSE}
+#Zaman serisi grafiðinde yýllarýn çeyreklere göre sýralý olmasý için düzenleme:
+ld$LoanOriginationQuarter <- as.character(ld$LoanOriginationQuarter)
+ld <- separate(ld, LoanOriginationQuarter, c("Quarters", "Year"), sep = " ")
+ld <- unite(ld, col =  LoanOriginationQuarter, Year, Quarters, sep = " ")
+```
+
+Yapýlan düzenleme sonrasý çeyrek-yýllara göre oluþturulan kredi tutarý grafiði elde edilmiþtir. Grafikte dikkat çeken durum ise 2009 yýlý baþlangýcýna ait faaliyetin olmayýþý. Bunun sebebiyse Prosper.com'un burada kýsaca ABD yetkili makamlarýyla arasýndaki bürokratik iþlemler nedeniyle diye açýklayabileceðim sessiz döneme girmesi. Ýlgili düzenlemelerin yapýlmasý sonrasýnda oluþturulan kredi tutarlarýnda yükselerek artan bir grafik görülmektedir. 
+```{r, message=FALSE, warning=FALSE}
+Origination_QY <- ld %>% 
+  select(Quarter = LoanOriginationQuarter, Amount = LoanOriginalAmount) %>% 
+  group_by(Quarter) %>% 
+  summarise(Loans = n()/ 10 ^ 3, Dollars = sum(Amount)/ 10 ^ 6) %>% 
+  arrange(Quarter) %>% 
+  filter(Quarter < "2014 Q3")
+
+ggplot(Origination_QY, aes(x = Quarter, y = Dollars)) +
+    geom_bar(stat = "identity", fill = "forestgreen") +
+    geom_text(aes(label = round(Dollars, 0)), vjust = -0.5, size = 3) +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5),
+          axis.title.x = element_blank()) +
+    ylab("Oluþturulan Kredi Miktarý - USD (milyon)") +
+    ggtitle("Çeyrek-Yýllara göre oluþturulan kredi tutarý (USD)")
+```
+
+Oluþturulan kredi sayýsý da kredi tutarlarý grafiðiyle uyuþan, benzer bir grafik vermektedir. 
+```{r, message=FALSE, warning=FALSE}
+ggplot(Origination_QY, aes(x = Quarter, y = Loans)) +
+    geom_bar(stat = "identity", fill = "violetred3") +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5),
+          axis.title.x = element_blank()) +
+    ylab("Oluþturulan Kredi Sayýsý (Bin)") +
+    ggtitle("Çeyrek-yýllara göre oluþturulan kredi sayýsý")
+```
+
+## Korelasyonlar
+
+Seçmiþ olduðum çeþitli nümerik deðiþkenler arasýnda korelasyon olup olmadýðýný *cor.test()* fonksiyonu ile gözlemledim. (Yorum satýrýnda korelasyon tablosu oluþturmayý saðlayan kodlar daha sonra kullanýlmak üzere býrakýlmýþtýr.)
+```{r, message=FALSE, warning=FALSE}
+cor.test(ld$CreditScoreAverage, ld$StatedMonthlyIncome)
+cor.test(ld$CreditScoreAverage, ld$LoanOriginalAmount)
+
+#corlist <- function(df, column) {
+#    m <- c()
+#    for (col in names(df)) {
+#        foo <- tryCatch(round(cor(as.numeric(df[, column]), 
+#                                  as.numeric(df[, col])), 
+#                              2), 
+#                        error = function(e)NA)
+#        m <- append(m, foo)
+#    }
+#    names(m) <- names(df) # assign row names
+#    m
+#}
+## calculate correlations between all values in a dataframe
+## (could not use cor(dataframe) becasue it does not coerce to numeric)
+#cortable <- function(df){
+#    m <- c()
+#    for (col in names(df)) {
+#        m <- cbind(m, suppressWarnings(corlist(df, col)))
+#    }    
+#    m <- data.frame(m)
+#    names(m) <- names(df) # assign column names
+#    m
+#}
+#cortable(ld)
+```
+
+"GoodmanKruskal" ile kategorik deðiþkenler ile nümerik deðiþkenler arasýndaki korelasyonu inceledim. Elde edilen sonuçlar çok düþük deðerler olduðu için araþtýrdýðým deðiþkenler arasýnda bir korelasyon bulunamamýþtýr. Ayrýca korelasyon konusu istatistik disiplini içinde baþlý baþýna ayrý bir konu olduðu için bu paylaþým içinde detaya girilmemiþtir.
+```{r, message=FALSE, warning=FALSE}
+library(GoodmanKruskal)
+#https://cran.r-project.org/web/packages/GoodmanKruskal/vignettes/GoodmanKruskal.html
+GKtau(ld$ProsperRating..Alpha., ld$Occupation)
+GKtau(ld$ProsperScore, ld$IsBorrowerHomeowner)
+```
